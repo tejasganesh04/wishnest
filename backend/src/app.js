@@ -1,21 +1,32 @@
-// app.js
+// --- Core imports ---
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
+// --- Route imports (explicit) ---
+const authRoutes = require('./routes/auth.routes');
+const wishlistRoutes = require('./routes/wishlist.routes'); // ✅ new route added
+const itemRoutes = require('./routes/item.routes');
+
+
+// --- Create app instance ---
 const app = express();
 
-// 🔹 basic middlewares
-app.use(express.json());      // parse incoming JSON
-app.use(cors());              // allow frontend requests
-app.use(helmet());            // security headers
-app.use(morgan('dev'));       // log every request in console
+// --- Global middleware ---
+app.use(express.json());   // Parse JSON body
+app.use(cors());           // Allow frontend to call API
+app.use(helmet());         // Security headers
+app.use(morgan('dev'));    // Request logs
 
-// 🔹 simple test route
+// --- Mount routers ---
+app.use('/api/auth', authRoutes);
+app.use('/api/wishlist', wishlistRoutes); // ✅ new route mounted
+app.use('/api/wishlist', itemRoutes); // mounts under the same base path
+// --- Health check / default ---
 app.get('/', (req, res) => {
-  res.send('WishNest backend is running 🚀');
+  res.send('✅ WishNest backend is running 🚀');
 });
 
-// export the app (so server.js can import it)
+// --- Export app for server.js ---
 module.exports = app;
