@@ -3,7 +3,8 @@
 
 const mongoose = require('mongoose');
 const Wishlist = require('../models/Wishlist');
-const Item = require('../models/Item');
+
+const { areFriends } = require('../services/friend.service');
 
 // Utility: ensure wishlist exists or create one
 async function getMyWishlistIdOrCreate(userId) {
@@ -247,6 +248,31 @@ exports.unreserveItem = async (req, res) => {
     return res.json({ item });
   } catch (err) {
     console.error('UNRESERVE_ITEM_ERROR:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ---------------- FRIEND VIEW: LIST ITEMS FOR USER ----------------
+// GET /api/wishlist/users/:userId/items
+exports.listItemsForUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const callerId = req.user.id;
+    const isOwner = callerId === userId;
+    const allowed = isOwner || (await areFriends(callerId, userId));
+    if (!allowed) return res.status(403).json({ error: 'Not allowed (not friends)' });
+
+    const wishlist = await Wishlist.findOne({ user: userId });
+    if (!wishlist) return res.status(404).json({ error: 'Wishlist not found' });
+
+    const items = await Item.find({ wishlist: wishlist._id }).sort({ createdAt: -1 });
+    return res.json({ items });
+  } catch (err) {
+    console.error('LIST_ITEMS_FOR_USER_ERROR:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 };

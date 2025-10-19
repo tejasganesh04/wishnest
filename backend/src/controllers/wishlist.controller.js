@@ -1,16 +1,14 @@
-// src/controllers/wishlist.controller.js
-// Handles the authenticated user's single wishlist (auto-creates on first access).
+// backend/src/controllers/wishlist.controller.js
+// Handles the authenticated user's single wishlist + friend-facing meta.
 
 const mongoose = require('mongoose');
 const Wishlist = require('../models/Wishlist');
+const { areFriends } = require('../services/friend.service');
 
-// ---------- GET or CREATE ----------
+// ---------- GET or CREATE (MY WISHLIST) ----------
 exports.getOrCreateMyWishlist = async (req, res) => {
   try {
-    // 1️⃣ look for existing wishlist
     let wishlist = await Wishlist.findOne({ user: req.user.id });
-
-    // 2️⃣ if none found, create a new default one
     if (!wishlist) {
       wishlist = await Wishlist.create({
         user: req.user.id,
@@ -18,8 +16,6 @@ exports.getOrCreateMyWishlist = async (req, res) => {
         description: '',
       });
     }
-
-    // 3️⃣ return the wishlist document
     return res.json({ wishlist });
   } catch (err) {
     console.error('GET_OR_CREATE_WISHLIST_ERROR:', err);
@@ -27,12 +23,11 @@ exports.getOrCreateMyWishlist = async (req, res) => {
   }
 };
 
-// ---------- UPDATE ----------
+// ---------- UPDATE (MY WISHLIST) ----------
 exports.updateMyWishlist = async (req, res) => {
   try {
     const { title, description } = req.body;
 
-    // 1️⃣ build update object
     const update = {};
     if (typeof title === 'string') {
       const t = title.trim();
@@ -46,7 +41,6 @@ exports.updateMyWishlist = async (req, res) => {
       update.description = d;
     }
 
-    // 2️⃣ find existing wishlist and update; upsert ensures one exists
     const wishlist = await Wishlist.findOneAndUpdate(
       { user: req.user.id },
       { $set: update },
@@ -60,7 +54,7 @@ exports.updateMyWishlist = async (req, res) => {
   }
 };
 
-// ---------- DELETE ----------
+// ---------- DELETE (MY WISHLIST) ----------
 exports.deleteMyWishlist = async (req, res) => {
   try {
     const deleted = await Wishlist.findOneAndDelete({ user: req.user.id });
@@ -68,6 +62,29 @@ exports.deleteMyWishlist = async (req, res) => {
     return res.json({ message: 'Wishlist deleted' });
   } catch (err) {
     console.error('DELETE_WISHLIST_ERROR:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ---------- FRIEND-FACING: GET META FOR USER ----------
+exports.getUserWishlistMeta = async (req, res) => {
+  try {
+    const ownerUserId = req.params.userId;
+    if (!mongoose.isValidObjectId(ownerUserId)) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const callerId = req.user.id;
+    const isOwner = callerId === ownerUserId;
+    const ok = isOwner || (await areFriends(callerId, ownerUserId));
+    if (!ok) return res.status(403).json({ error: 'Not allowed (not friends)' });
+
+    const wl = await Wishlist.findOne({ user: ownerUserId }).select('title description updatedAt');
+    if (!wl) return res.status(404).json({ error: 'Wishlist not found' });
+
+    return res.json({ wishlist: wl });
+  } catch (err) {
+    console.error('GET_USER_WISHLIST_META_ERROR:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 };
